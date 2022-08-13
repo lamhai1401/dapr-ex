@@ -15,6 +15,17 @@ type stateData struct {
 }
 
 func main() {
+	http.HandleFunc("/echo", func(w http.ResponseWriter, r *http.Request) {
+		body, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			fmt.Println(err.Error())
+		} else {
+			fmt.Println("Echo body", string(body))
+		}
+
+		w.Write(body)
+	})
+
 	http.HandleFunc("/greeting",
 		func(w http.ResponseWriter, r *http.Request) {
 			resp, _ := http.Get("http://localhost:8089/v1.0/state/statestore/mystate")
