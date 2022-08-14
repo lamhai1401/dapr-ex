@@ -4,6 +4,7 @@ go 1.18
 
 require (
 	github.com/dapr/go-sdk v1.5.0
+	github.com/gorilla/mux v1.8.0
 	google.golang.org/grpc v1.48.0
 )
 

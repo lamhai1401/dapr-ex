@@ -2,11 +2,18 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
+	"math/rand"
 	"net/http"
 	"strconv"
+	"time"
+
+	dapr "github.com/dapr/go-sdk/client"
+	"github.com/gorilla/mux"
 )
 
 type stateData struct {
@@ -15,7 +22,11 @@ type stateData struct {
 }
 
 func main() {
-	http.HandleFunc("/echo", func(w http.ResponseWriter, r *http.Request) {
+	r := mux.NewRouter()
+
+	r.HandleFunc("/checkout", getCheckout).Methods("POST", "OPTIONS")
+
+	r.HandleFunc("/echo", func(w http.ResponseWriter, r *http.Request) {
 		body, err := ioutil.ReadAll(r.Body)
 		if err != nil {
 			fmt.Println(err.Error())
@@ -26,7 +37,7 @@ func main() {
 		w.Write(body)
 	})
 
-	http.HandleFunc("/greeting",
+	r.HandleFunc("/greeting",
 		func(w http.ResponseWriter, r *http.Request) {
 			resp, _ := http.Get("http://localhost:8089/v1.0/state/statestore/mystate")
 			defer resp.Body.Close()
@@ -49,9 +60,48 @@ func main() {
 			} else {
 				fmt.Fprintf(w, "I’ve greeted you "+strconv.Itoa(count)+" times.")
 			}
-		})
+		},
+	)
 
-	go http.ListenAndServe(":8088", nil)
+	go http.ListenAndServe(":8088", r)
+
+	OutputBinding()
 	// RunGRPCClient()
 	select {}
+}
+
+//code
+func getCheckout(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var orderId int
+	err := json.NewDecoder(r.Body).Decode(&orderId)
+	log.Println("Received Message: ", orderId)
+	if err != nil {
+		log.Printf("error parsing checkout input binding payload: %s", err)
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+}
+
+func OutputBinding() {
+	BINDING_NAME := "checkout"
+	BINDING_OPERATION := "create"
+	client, err := dapr.NewClient()
+	if err != nil {
+		panic(err.Error())
+	}
+	defer client.Close()
+
+	for {
+		time.Sleep(5000 * time.Millisecond)
+		ctx := context.Background()
+		orderId := rand.Intn(1000-1) + 1
+		// Using Dapr SDK to invoke output binding
+		in := &dapr.InvokeBindingRequest{Name: BINDING_NAME, Operation: BINDING_OPERATION, Data: []byte(strconv.Itoa(orderId))}
+		err = client.InvokeOutputBinding(ctx, in)
+		if err != nil {
+			panic(err.Error())
+		}
+		log.Println("Sending message: " + strconv.Itoa(orderId))
+	}
 }
